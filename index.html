@@ -1,0 +1,693 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sinthan's but with a Z proxy builder</title>
+<style>
+  :root{ --bench:#cfd2d6; --panel:#eceef0; --line:#8a8f96; --ink:#141414; --mute:#5b6067; --field:#ffffff; }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font:14px/1.45 "Helvetica Neue",Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bench);
+    display:grid;grid-template-columns:410px 1fr;height:100vh;overflow:hidden}
+  aside{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;padding:18px 20px 40px}
+  main{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px;overflow:auto}
+  h1{font-size:15px;font-weight:700;margin:0 0 14px}
+  details{border:1px solid var(--line);background:var(--field);margin:0 0 10px;padding:0 12px 10px;border-radius:3px}
+  details:not([open]){padding-bottom:0}
+  summary{font-weight:700;font-size:14px;padding:10px 0;margin:0 -12px;cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;background:#dfe2e6;border-bottom:1px solid var(--line);padding-left:12px}
+  details:not([open]) summary{border-bottom:0}
+  summary:hover{background:#d3d7dc}
+  .ac{position:relative}
+  .ac-list{position:absolute;left:0;right:0;top:100%;z-index:5;background:var(--field);border:1px solid var(--line);border-top:0;max-height:220px;overflow-y:auto;display:none}
+  .ac-list div{padding:6px 8px;cursor:pointer;font-size:13px}
+  .ac-list div:hover,.ac-list div.sel{background:#dfe2e6}
+  summary::-webkit-details-marker{display:none}
+  summary::before{content:"";width:0;height:0;margin-left:2px;border-left:5px solid var(--ink);border-top:4px solid transparent;border-bottom:4px solid transparent;transition:transform .12s}
+  details[open] summary::before{transform:rotate(90deg)}
+  .status{font-size:12px;color:var(--mute);min-height:16px;margin-top:6px}
+  label{display:block;margin:6px 0 2px;color:var(--mute);font-size:12px}
+  input[type=text],textarea,select{width:100%;padding:6px 8px;border:1px solid var(--line);background:var(--field);color:var(--ink);font:inherit;border-radius:2px}
+  textarea{resize:vertical;min-height:70px}
+  input:focus,textarea:focus,select:focus,button:focus{outline:2px solid var(--ink);outline-offset:1px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .range{display:grid;grid-template-columns:1fr 46px;gap:8px;align-items:center}
+  .range input[type=range]{width:100%;margin:0}
+  .range output{font-size:12px;color:var(--mute);text-align:right;font-variant-numeric:tabular-nums}
+  .check{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px}
+  .check label{margin:0;color:var(--ink)}
+  .check input{margin:0}
+  button{padding:8px 14px;border:1px solid var(--ink);background:var(--ink);color:#fff;font:inherit;cursor:pointer;border-radius:2px}
+  button.secondary{background:transparent;color:var(--ink)}
+  .actions{display:flex;gap:10px;flex-wrap:wrap}
+  #preview{max-height:calc(100vh - 100px);max-width:100%;box-shadow:0 10px 30px rgba(0,0,0,.35);background:#fff}
+  .hint{font-size:12px;color:var(--mute);margin:4px 0 0}
+  .drop{border:1px dashed var(--line);padding:14px;text-align:center;color:var(--mute);font-size:12px;cursor:pointer;background:var(--field)}
+  .drop.over{border-color:var(--ink);color:var(--ink)}
+  .drop input{display:none}
+  @media (max-width:900px){ body{grid-template-columns:1fr;grid-template-rows:auto 1fr;overflow:auto;height:auto}
+    aside{border-right:0;border-bottom:1px solid var(--line)} #preview{max-height:80vh} }
+</style>
+</head>
+<body>
+<aside>
+  <h1>Sinthan's but with a Z proxy builder <span style="font-weight:400;color:var(--mute)">63 × 88 mm</span></h1>
+
+  <details open>
+    <summary>Load a card from Scryfall</summary>
+    <label for="lookup">Card name</label>
+    <div class="ac"><input type="text" id="lookup" placeholder="Start typing a card name, then click a suggestion (Enter loads the typed name)" autocomplete="off"><div class="ac-list" id="acList"></div></div>
+    <div class="row">
+      <div><label for="lookupSet">Printing set code (optional)</label><input type="text" id="lookupSet" placeholder="e.g. lea, slz"></div>
+      <div><label>&nbsp;</label><div class="actions"><button id="loadArt" type="button">Load artwork</button><button class="secondary" id="randomCard" type="button">Random</button></div></div>
+    </div>
+    <div class="status" id="status"></div>
+  </details>
+
+  <details open>
+    <summary>Frame</summary>
+    <div class="row">
+      <div><label for="layout">Layout</label>
+        <select id="layout">
+          <option value="standard">Standard (art + text)</option>
+          <option value="land">Land (no cost, tall art)</option>
+          <option value="strip">Art strip (small art, long text)</option>
+          <option value="full">Full-art (text over picture)</option>
+          <option value="text">Text only (no picture)</option>
+        </select></div>
+      <div><label for="treat">Print treatment</label>
+        <select id="treat">
+          <option value="photocopy">Photocopy</option>
+          <option value="negative">Photocopy negative</option>
+          <option value="banding">Color banding (CMY)</option>
+          <option value="newspaper">Newspaper</option>
+          <option value="poker">Taped on a poker card</option>
+        </select></div>
+    </div>
+    <div class="row">
+      <div><label for="headFont">Title font</label>
+        <select id="headFont">
+          <option value="sans">Grotesk sans (Helvetica/Arial)</option>
+          <option value="basker">Baskerville</option>
+          <option value="times">Times</option>
+          <option value="mono">Word processor (Courier)</option>
+        </select></div>
+      <div><label for="bodyFont">Text font</label>
+        <select id="bodyFont">
+          <option value="basker">Baskerville</option>
+          <option value="times">Times</option>
+          <option value="sans">Grotesk sans</option>
+          <option value="mono">Word processor (Courier)</option>
+        </select></div>
+    </div>
+    <div class="row">
+      <div><label for="rulesStyle">Rules text case</label>
+        <select id="rulesStyle"><option value="normal">As typed</option><option value="caps">Uppercase</option></select></div>
+      <div><label for="pokerColor">Poker card color</label>
+        <select id="pokerColor"><option value="red">Red</option><option value="blue">Blue</option></select></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Card</summary>
+    <div class="check"><input type="checkbox" id="customFlag"><label for="customFlag">Custom card (custom name above the real name)</label></div>
+    <div id="customWrap" hidden>
+      <label for="customName">Custom name</label>
+      <input type="text" id="customName" placeholder="Custom name">
+    </div>
+    <label for="name">Name</label>
+    <input type="text" id="name" placeholder="Card name">
+    <div class="row">
+      <div><label for="cost">Mana cost</label><input type="text" id="cost" placeholder="2RR"></div>
+      <div><label for="pt">Power / toughness or loyalty</label><input type="text" id="pt" placeholder="3/3"></div>
+    </div>
+    <label for="type">Type line</label>
+    <input type="text" id="type" placeholder="Summon — Goblin">
+    <label for="rules">Rules text</label>
+    <textarea id="rules" placeholder="Rules text. Blank line = new paragraph. Use TAP for the tap symbol."></textarea>
+    <label for="flavor">Flavor text</label>
+    <textarea id="flavor" style="min-height:44px" placeholder="Optional"></textarea>
+    <div class="row">
+      <div><label for="annotation">Handwritten note</label><input type="text" id="annotation" placeholder="e.g. RIP"></div>
+      <div><label for="number">Collector number</label><input type="text" id="number" placeholder="0001"></div>
+    </div>
+    <div class="row">
+      <div><label for="setcode">Set code</label><input type="text" id="setcode" placeholder="PRX"></div>
+      <div><label for="footer">Footer text (right)</label><input type="text" id="footer" placeholder="proxy — not for sale"></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Picture</summary>
+    <div class="drop" id="drop"><input type="file" id="file" accept="image/*">Click, drop or paste an image</div>
+    <label for="fit">Fit</label>
+    <select id="fit"><option value="contain">Fit inside frame (no cropping)</option><option value="cover">Fill frame (crop edges)</option></select>
+    <div class="range"><label>Zoom</label><span></span><input type="range" id="zoom" min="0.5" max="3" step="0.01" value="1"><output>1.00</output></div>
+    <div class="range"><label>Offset X</label><span></span><input type="range" id="offx" min="-1" max="1" step="0.01" value="0"><output>0.00</output></div>
+    <div class="range"><label>Offset Y</label><span></span><input type="range" id="offy" min="-1" max="1" step="0.01" value="0"><output>0.00</output></div>
+    <label for="dither">Halftone mode</label>
+    <select id="dither">
+      <option value="bayer">Ordered dither (screen)</option>
+      <option value="fs">Error diffusion (grain)</option>
+      <option value="threshold">Hard threshold</option>
+      <option value="gray">Grayscale, no dither</option>
+    </select>
+    <div class="range"><label>Dot size</label><span></span><input type="range" id="dot" min="1" max="5" step="1" value="2"><output>2</output></div>
+    <div class="range"><label>Contrast</label><span></span><input type="range" id="contrast" min="0" max="3" step="0.05" value="1.4"><output>1.40</output></div>
+    <div class="range"><label>Brightness</label><span></span><input type="range" id="bright" min="-100" max="100" step="1" value="0"><output>0</output></div>
+    <div class="check"><input type="checkbox" id="invert"><label for="invert">Invert picture</label></div>
+    <div class="check"><input type="checkbox" id="artBorder" checked><label for="artBorder">Border around picture</label></div>
+  </details>
+
+  <details>
+    <summary>Photocopy</summary>
+    <div class="range"><label>Paper grain</label><span></span><input type="range" id="grain" min="0" max="1" step="0.01" value="0.35"><output>0.35</output></div>
+    <div class="range"><label>Toner contrast</label><span></span><input type="range" id="toner" min="0" max="1" step="0.01" value="0.3"><output>0.30</output></div>
+    <div class="range"><label>Ink specks</label><span></span><input type="range" id="specks" min="0" max="1" step="0.01" value="0.3"><output>0.30</output></div>
+    <div class="range"><label>Edge darkening</label><span></span><input type="range" id="vignette" min="0" max="1" step="0.01" value="0.25"><output>0.25</output></div>
+    <div class="range"><label>Paper yellowing</label><span></span><input type="range" id="yellow" min="0" max="1" step="0.01" value="0.5"><output>0.50</output></div>
+    <div class="range"><label>Banding strength</label><span></span><input type="range" id="band" min="0" max="1" step="0.01" value="0.5"><output>0.50</output></div>
+  </details>
+
+  <details>
+    <summary>Damage</summary>
+    <div class="range"><label>Pencil scratches</label><span></span><input type="range" id="scratch" min="0" max="1" step="0.01" value="0.3"><output>0.30</output></div>
+    <div class="range"><label>Tape pieces</label><span></span><input type="range" id="tape" min="0" max="6" step="1" value="2"><output>2</output></div>
+    <div class="range"><label>Ink drops</label><span></span><input type="range" id="drops" min="0" max="8" step="1" value="0"><output>0</output></div>
+    <div class="range"><label>Thumb prints</label><span></span><input type="range" id="thumbs" min="0" max="3" step="1" value="0"><output>0</output></div>
+    <div class="range"><label>Ink smears</label><span></span><input type="range" id="smears" min="0" max="4" step="1" value="0"><output>0</output></div>
+    <div class="range"><label>Miscut</label><span></span><input type="range" id="miscut" min="0" max="1" step="0.01" value="0"><output>0.00</output></div>
+    <div class="range"><label>Crimps</label><span></span><input type="range" id="crimps" min="0" max="3" step="1" value="0"><output>0</output></div>
+    <div class="actions" style="margin-top:8px"><button class="secondary" id="reroll" type="button">Re-roll texture</button></div>
+  </details>
+
+  <details open>
+    <summary>Export</summary>
+    <label for="dpi">Resolution</label>
+    <select id="dpi"><option value="1">300 dpi (744 × 1039)</option><option value="2">600 dpi (1488 × 2079)</option></select>
+    <div class="actions" style="margin-top:10px">
+      <button id="download" type="button">Download PNG</button>
+      <button class="secondary" id="reset" type="button">Clear card</button>
+    </div>
+    <p class="hint">Preview renders at 300 dpi. Export uses the resolution selected above.</p>
+  </details>
+</aside>
+
+<main><canvas id="preview" width="744" height="1039"></canvas></main>
+
+<script>
+(() => {
+  const W = 744, H = 1039;               // 63 × 88 mm at 300 dpi
+  const INK = [18, 18, 18];
+  const FONTS = {
+    sans: '"Helvetica Neue",Helvetica,Arial,sans-serif',
+    basker: 'Baskerville,"Libre Baskerville","Baskerville Old Face","Times New Roman",Georgia,serif',
+    times: '"Times New Roman",Times,serif',
+    mono: '"Courier New",Courier,"Liberation Mono",monospace'
+  };
+  const HAND = '"Segoe Script","Bradley Hand","Comic Sans MS",cursive';
+
+  const $ = id => document.getElementById(id);
+  const ids = ['layout','treat','headFont','bodyFont','rulesStyle','pokerColor',
+               'customFlag','customName','name','cost','pt','type','rules','flavor','annotation','number','setcode','footer',
+               'fit','zoom','offx','offy','dither','dot','contrast','bright','invert','artBorder',
+               'grain','toner','specks','vignette','yellow','band',
+               'scratch','tape','drops','thumbs','smears','miscut','crimps','dpi'];
+  let img = null, seed = 1, timer = null;
+
+  const S = () => { const o = {}; for (const id of ids) { const el = $(id);
+      o[id] = el.type === 'checkbox' ? el.checked : (el.type === 'range' ? parseFloat(el.value) : el.value); } return o; };
+
+  const rng = a => () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  const rgb = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+  const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+  const paperFor = st => st.treat === 'newspaper' ? [214, 208, 196] : [239, 233, 219];
+
+  function wrapLines(ctx, text, maxW) {
+    const out = [];
+    for (const para of text.split('\n')) {
+      if (para.trim() === '') { out.push(''); continue; }
+      let line = '';
+      for (const w of para.split(/\s+/)) {
+        const t = line ? line + ' ' + w : w;
+        if (ctx.measureText(t).width > maxW && line) { out.push(line); line = w; } else line = t;
+      }
+      out.push(line);
+    }
+    return out;
+  }
+
+  // ---------- picture ----------
+  function processArt(aw, ah, s, st, paper) {
+    const k = st.dot + (st.treat === 'newspaper' ? 1 : 0);
+    const pw = Math.max(1, Math.round(aw * s / k)), ph = Math.max(1, Math.round(ah * s / k));
+    const c = document.createElement('canvas'); c.width = pw; c.height = ph;
+    const x = c.getContext('2d', { willReadFrequently: true });
+    x.fillStyle = rgb(paper); x.fillRect(0, 0, pw, ph);
+    const base = st.fit === 'cover' ? Math.max(pw / img.width, ph / img.height) : Math.min(pw / img.width, ph / img.height);
+    const r = base * st.zoom, dw = img.width * r, dh = img.height * r;
+    const dx = (pw - dw) / 2 - st.offx * Math.abs(dw - pw) / 2 * (dw > pw ? 1 : -1);
+    const dy = (ph - dh) / 2 - st.offy * Math.abs(dh - ph) / 2 * (dh > ph ? 1 : -1);
+    x.drawImage(img, dx, dy, dw, dh);
+    const id = x.getImageData(0, 0, pw, ph), d = id.data;
+    const n = pw * ph, lum = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      let l = 0.299 * d[i*4] + 0.587 * d[i*4+1] + 0.114 * d[i*4+2];
+      l = (l - 128) * st.contrast + 128 + st.bright;
+      if (st.invert) l = 255 - l;
+      lum[i] = clamp(l, 0, 255);
+    }
+    const bayer = [0,32,8,40,2,34,10,42,48,16,56,24,50,18,58,26,12,44,4,36,14,46,6,38,60,28,52,20,62,30,54,22,
+                   3,35,11,43,1,33,9,41,51,19,59,27,49,17,57,25,15,47,7,39,13,45,5,37,63,31,55,23,61,29,53,21];
+    for (let y = 0; y < ph; y++) for (let xx = 0; xx < pw; xx++) {
+      const i = y * pw + xx; let v = lum[i], t;
+      if (st.dither === 'gray') t = v / 255;
+      else if (st.dither === 'threshold') t = v > 128 ? 1 : 0;
+      else if (st.dither === 'bayer') t = v > (bayer[(y & 7) * 8 + (xx & 7)] + 0.5) * 4 ? 1 : 0;
+      else { t = v > 128 ? 1 : 0; const err = v - t * 255;
+        if (xx + 1 < pw) lum[i+1] += err * 7/16;
+        if (y + 1 < ph) { if (xx > 0) lum[i+pw-1] += err * 3/16; lum[i+pw] += err * 5/16; if (xx + 1 < pw) lum[i+pw+1] += err * 1/16; } }
+      d[i*4] = INK[0] + (paper[0] - INK[0]) * t; d[i*4+1] = INK[1] + (paper[1] - INK[1]) * t; d[i*4+2] = INK[2] + (paper[2] - INK[2]) * t; d[i*4+3] = 255;
+    }
+    x.putImageData(id, 0, 0);
+    return c;
+  }
+
+  // ---------- card content ----------
+  function drawCard(ctx, s, st) {
+    const paper = paperFor(st), HEAD = FONTS[st.headFont], BODY = FONTS[st.bodyFont];
+    const R = rng(seed + 7);
+    ctx.save(); ctx.scale(s, s);
+    ctx.fillStyle = rgb(paper); ctx.fillRect(0, 0, W, H);
+
+    if (st.treat === 'newspaper') {         // faint show-through of the reverse page
+      ctx.fillStyle = 'rgba(40,40,40,0.06)';
+      for (let y = 30; y < H; y += 9) { let x = 30 + R() * 40; while (x < W - 60) { const w = 10 + R() * 50; ctx.fillRect(x, y, w, 3); x += w + 4 + R() * 8; } }
+    }
+
+    const m = 46, cw = W - 2 * m, layout = st.layout;
+    const full = layout === 'full';
+    const hasArt = layout !== 'text';
+    const showCost = layout !== 'land';
+
+    // full-art: picture first, under everything
+    let artRect = null;
+    if (full) artRect = { x: 12, y: 12, w: W - 24, h: H - 24 };
+    if (full && img) { const art = processArt(artRect.w, artRect.h, s, st, paper); ctx.imageSmoothingEnabled = false; ctx.drawImage(art, artRect.x, artRect.y, artRect.w, artRect.h); ctx.imageSmoothingEnabled = true; }
+
+    ctx.strokeStyle = rgb(INK); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(7, 7, W - 14, H - 14, 22); ctx.stroke();
+
+    ctx.fillStyle = rgb(INK); ctx.textBaseline = 'alphabetic';
+    const fitText = (txt, size, maxW, weight, fam) => { let f = size; ctx.font = `${weight} ${f}px ${fam}`; while (ctx.measureText(txt).width > maxW && f > 14) { f -= 1; ctx.font = `${weight} ${f}px ${fam}`; } };
+
+    // header block (paper box when full-art)
+    const custom = st.customFlag && st.customName.trim();
+    if (full) { const top = 50, bottom = (custom ? 122 : 92) + 34 + 16;
+      ctx.fillStyle = rgb(paper); ctx.fillRect(m - 14, top, cw + 28, bottom - top); ctx.strokeStyle = rgb(INK); ctx.strokeRect(m - 14, top, cw + 28, bottom - top); ctx.fillStyle = rgb(INK); }
+
+    ctx.font = `700 40px ${HEAD}`; ctx.textAlign = 'right';
+    const cost = showCost ? st.cost.trim() : ''; if (cost) ctx.fillText(cost, W - m, 92);
+    const costW = cost ? ctx.measureText(cost).width + 18 : 0;
+
+    ctx.textAlign = 'left'; let y = 92;
+    if (custom) { fitText(st.customName, 40, cw - costW, 700, HEAD); ctx.fillText(st.customName, m, y);
+      fitText(st.name, 24, cw - costW - 12, 400, HEAD); ctx.fillText(st.name, m + 12, y + 30); y += 30; }
+    else { fitText(st.name, 40, cw - costW, 700, HEAD); ctx.fillText(st.name, m, y); }
+    fitText(st.type, 25, cw, 400, BODY); ctx.fillText(st.type, m, y + 34);
+
+    if (st.annotation.trim()) {
+      ctx.save(); ctx.translate(W - m - 10, y + 42); ctx.rotate(-0.14);
+      ctx.font = `400 32px ${HAND}`; ctx.textAlign = 'right'; ctx.fillStyle = 'rgba(25,25,25,0.85)';
+      ctx.fillText(st.annotation, 0, 0); ctx.restore();
+    }
+
+    // picture box for non-full layouts
+    let ry;
+    if (hasArt && !full) {
+      const ay = y + 58, ah = layout === 'land' ? 600 : layout === 'strip' ? 280 : 560;
+      artRect = { x: m, y: ay, w: cw, h: ah };
+      if (img) { const art = processArt(cw, ah, s, st, paper); ctx.imageSmoothingEnabled = false; ctx.drawImage(art, m, ay, cw, ah); ctx.imageSmoothingEnabled = true; }
+      else { ctx.strokeStyle = 'rgba(18,18,18,0.35)'; ctx.setLineDash([6, 6]); ctx.strokeRect(m, ay, cw, ah); ctx.setLineDash([]);
+        ctx.font = `400 20px ${FONTS.sans}`; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(18,18,18,0.5)'; ctx.fillText('picture', W / 2, ay + ah / 2); ctx.fillStyle = rgb(INK); }
+      if (st.artBorder) { ctx.strokeStyle = rgb(INK); ctx.lineWidth = 2; ctx.strokeRect(m, ay, cw, ah); }
+      ry = ay + ah + 36;
+    } else if (full) { ry = H - 330; }
+    else { ry = y + 80; }
+
+    // rules + flavor
+    const ptText = st.pt.trim();
+    const caps = st.rulesStyle === 'caps';
+    const rulesTxt = caps ? st.rules.toUpperCase() : st.rules;
+    const rh = H - 90 - ry;
+    if (full) { ctx.fillStyle = rgb(paper); ctx.fillRect(m - 14, ry - 40, cw + 28, H - 62 - (ry - 40)); ctx.strokeStyle = rgb(INK); ctx.lineWidth = 2; ctx.strokeRect(m - 14, ry - 40, cw + 28, H - 62 - (ry - 40)); ctx.fillStyle = rgb(INK); }
+    let size = layout === 'text' ? 30 : (caps ? 22 : 24), lines, fl, lh;
+    ctx.textAlign = 'left';
+    for (;;) {
+      lh = Math.round(size * 1.18);
+      ctx.font = `400 ${size}px ${BODY}`; lines = rulesTxt.trim() ? wrapLines(ctx, rulesTxt, cw) : [];
+      ctx.font = `italic 400 ${size - 1}px ${BODY}`; fl = st.flavor.trim() ? wrapLines(ctx, st.flavor, cw - (ptText ? 130 : 0)) : [];
+      const need = (lines.length + fl.length) * lh + (fl.length ? lh * 0.6 : 0);
+      if (need <= rh || size <= 13) break; size -= 1;
+    }
+    let ty = ry; ctx.font = `400 ${size}px ${BODY}`;
+    for (const l of lines) { ctx.fillText(l, m, ty); ty += lh; }
+    if (fl.length) { ty += lh * 0.6; ctx.font = `italic 400 ${size - 1}px ${BODY}`; for (const l of fl) { ctx.fillText(l, m, ty); ty += lh; } }
+
+    if (ptText) {
+      const bw = 118, bh = 44, bx = W - m - bw + 6, by = H - 92 - bh;
+      ctx.fillStyle = rgb(paper); ctx.fillRect(bx, by, bw, bh);
+      ctx.strokeStyle = rgb(INK); ctx.lineWidth = 2; ctx.strokeRect(bx, by, bw, bh);
+      ctx.fillStyle = rgb(INK); ctx.font = `700 28px ${HEAD}`; ctx.textAlign = 'center'; ctx.fillText(ptText, bx + bw / 2, by + 31);
+    }
+
+    // footer
+    if (full) { ctx.fillStyle = rgb(paper); ctx.fillRect(m - 14, H - 62, cw + 28, 32); ctx.fillStyle = rgb(INK); }
+    ctx.textAlign = 'left'; ctx.font = `400 12px ${FONTS.sans}`;
+    ctx.fillText(st.number.trim(), m, H - 52);
+    ctx.fillText([st.setcode.trim(), 'EN'].filter(Boolean).join(' • '), m, H - 38);
+    ctx.textAlign = 'right'; ctx.fillText(st.footer, W - m, H - 38);
+    ctx.restore();
+  }
+
+  // ---------- treatments on the flat card ----------
+  function pixelPass(ctx, cw, ch, st, R, paper) {
+    const id = ctx.getImageData(0, 0, cw, ch), d = id.data;
+    const g = st.grain * 38, tone = st.toner * 1.6 + 1, sp = st.specks * 0.0025, yl = st.yellow;
+    for (let i = 0; i < d.length; i += 4) {
+      const n = (R() - 0.5) * g;
+      for (let c = 0; c < 3; c++) { let v = d[i + c] + n; v = (v - 150) * tone + 150; d[i + c] = clamp(v, 0, 255); }
+      if (R() < sp) { const k = 60 + R() * 120; d[i] = k; d[i+1] = k; d[i+2] = k; }
+      if (yl > 0) { const w = (d[i] / 255) * yl * 0.5; d[i+2] = d[i+2] * (1 - w * 0.35); }
+    }
+    ctx.putImageData(id, 0, 0);
+  }
+
+  function bandingPass(ctx, cw, ch, st, R, paper) {
+    const src = ctx.getImageData(0, 0, cw, ch), sd = src.data;
+    const out = ctx.createImageData(cw, ch), od = out.data;
+    const ink = new Float32Array(cw * ch);
+    for (let i = 0; i < cw * ch; i++) ink[i] = 1 - (0.299 * sd[i*4] + 0.587 * sd[i*4+1] + 0.114 * sd[i*4+2]) / 255;
+    // per-row channel offsets: base misregistration + random bands
+    const amp = st.band, rows = new Array(ch);
+    let y = 0;
+    while (y < ch) { const h = 2 + Math.floor(R() * 40); const jitter = R() < 0.35 ? (R() - 0.5) * 30 * amp : 0;
+      for (let k = 0; k < h && y + k < ch; k++) rows[y + k] = jitter; y += h; }
+    const sc = Math.round(cw / 744);
+    const offC = -3 * sc * amp, offM = 0, offY = 3 * sc * amp;
+    const sample = (x, yy, o) => { const xx = clamp(Math.round(x + o), 0, cw - 1); return ink[yy * cw + xx]; };
+    for (let yy = 0; yy < ch; yy++) {
+      const j = rows[yy] * sc, bandTint = R() < 0.01 ? Math.floor(R() * 3) : -1;
+      for (let x = 0; x < cw; x++) {
+        const i = (yy * cw + x) * 4;
+        let c = sample(x, yy, offC + j), mm = sample(x, yy, offM + j * 0.5), yl = sample(x, yy, offY - j);
+        od[i] = paper[0] * (1 - c); od[i+1] = paper[1] * (1 - mm); od[i+2] = paper[2] * (1 - yl); od[i+3] = 255;
+      }
+      if (bandTint >= 0 && amp > 0) { // thin colored stripe
+        for (let x = 0; x < cw; x++) { const i = (yy * cw + x) * 4; od[i + bandTint] = od[i + bandTint] * (1 - 0.25 * amp); }
+      }
+    }
+    ctx.putImageData(out, 0, 0);
+  }
+
+  function invertPass(ctx, cw, ch) {
+    const id = ctx.getImageData(0, 0, cw, ch), d = id.data;
+    for (let i = 0; i < d.length; i += 4) { d[i] = 255 - d[i]; d[i+1] = 255 - d[i+1]; d[i+2] = 255 - d[i+2]; }
+    ctx.putImageData(id, 0, 0);
+  }
+
+  // ---------- damage layer (base units) ----------
+  function damage(ctx, st, R) {
+    // pencil scratches
+    const nScratch = Math.round(st.scratch * 40);
+    ctx.lineCap = 'round';
+    for (let i = 0; i < nScratch; i++) {
+      const x0 = R() * W, y0 = R() * H, len = 30 + R() * 260, a = R() * Math.PI * 2;
+      ctx.strokeStyle = `rgba(25,25,25,${0.12 + R() * 0.4})`; ctx.lineWidth = 0.5 + R() * 1.4;
+      ctx.beginPath(); ctx.moveTo(x0, y0);
+      ctx.quadraticCurveTo(x0 + Math.cos(a + 0.5) * len * 0.5 + (R() - 0.5) * 40, y0 + Math.sin(a + 0.5) * len * 0.5 + (R() - 0.5) * 40, x0 + Math.cos(a) * len, y0 + Math.sin(a) * len);
+      ctx.stroke();
+      if (R() < 0.35) for (let j = 0; j < 3 + R() * 6; j++) {
+        const hx = x0 + (R() - 0.5) * 30, hy = y0 + (R() - 0.5) * 30, hl = 6 + R() * 18;
+        ctx.strokeStyle = `rgba(25,25,25,${0.15 + R() * 0.35})`; ctx.lineWidth = 0.6 + R();
+        ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(hx + Math.cos(a + 1.2) * hl, hy + Math.sin(a + 1.2) * hl); ctx.stroke();
+      }
+    }
+    // ink drops
+    for (let i = 0; i < st.drops; i++) {
+      const cx = 40 + R() * (W - 80), cy = 40 + R() * (H - 80), r = 6 + R() * 22;
+      ctx.fillStyle = `rgba(15,15,15,${0.75 + R() * 0.2})`;
+      ctx.beginPath();
+      for (let k = 0; k < 5; k++) { const a = R() * Math.PI * 2, d = R() * r * 0.5; ctx.moveTo(cx + Math.cos(a) * d + r * 0.7, cy + Math.sin(a) * d); ctx.arc(cx + Math.cos(a) * d, cy + Math.sin(a) * d, r * (0.55 + R() * 0.45), 0, Math.PI * 2); }
+      ctx.fill();
+      for (let k = 0; k < 2 + R() * 5; k++) { const a = R() * Math.PI * 2, d = r + R() * r * 2; ctx.beginPath(); ctx.arc(cx + Math.cos(a) * d, cy + Math.sin(a) * d, 1 + R() * 3, 0, Math.PI * 2); ctx.fill(); }
+      ctx.strokeStyle = 'rgba(15,15,15,0.25)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, cy, r * 1.15, 0, Math.PI * 2); ctx.stroke();
+    }
+    // thumb prints
+    for (let i = 0; i < st.thumbs; i++) {
+      const cx = 60 + R() * (W - 120), cy = 60 + R() * (H - 120), rot = R() * Math.PI, rx = 42 + R() * 14, ry = rx * 1.35;
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(rot); ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+      for (let k = 1; k <= 13; k++) {
+        const f = k / 13; ctx.strokeStyle = `rgba(20,20,20,${0.10 + R() * 0.18})`;
+        ctx.setLineDash([4 + R() * 18, 2 + R() * 9]); ctx.lineDashOffset = R() * 30;
+        ctx.beginPath(); ctx.ellipse(0, 0, rx * f, ry * f * (0.85 + f * 0.15), 0, 0, Math.PI * 2); ctx.stroke();
+        if (k % 3 === 0) { ctx.beginPath(); ctx.ellipse(-rx * 0.15, -ry * 0.1, rx * f * 0.6, ry * f * 0.55, 0.4, 0, Math.PI * 2); ctx.stroke(); }
+      }
+      ctx.setLineDash([]); ctx.restore();
+    }
+    // ink smears
+    for (let i = 0; i < st.smears; i++) {
+      const x0 = 40 + R() * (W - 80), y0 = 40 + R() * (H - 80), len = 60 + R() * 220, a = R() * Math.PI * 2;
+      const x1 = x0 + Math.cos(a) * len, y1 = y0 + Math.sin(a) * len;
+      const g = ctx.createLinearGradient(x0, y0, x1, y1); g.addColorStop(0, 'rgba(20,20,20,0.55)'); g.addColorStop(1, 'rgba(20,20,20,0)');
+      ctx.strokeStyle = g; ctx.lineWidth = 10 + R() * 22; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.quadraticCurveTo((x0 + x1) / 2 + (R() - 0.5) * 60, (y0 + y1) / 2 + (R() - 0.5) * 60, x1, y1); ctx.stroke();
+    }
+    // tape
+    for (let i = 0; i < st.tape; i++) {
+      const edge = Math.floor(R() * 4), tw = 130 + R() * 100, th = 44 + R() * 18; let x, y, rot;
+      if (edge === 0) { x = R() * W; y = 4 + R() * 30; rot = (R() - 0.5) * 0.5; }
+      else if (edge === 1) { x = R() * W; y = H - 4 - R() * 30; rot = (R() - 0.5) * 0.5; }
+      else if (edge === 2) { x = 4 + R() * 30; y = R() * H; rot = Math.PI / 2 + (R() - 0.5) * 0.5; }
+      else { x = W - 4 - R() * 30; y = R() * H; rot = Math.PI / 2 + (R() - 0.5) * 0.5; }
+      drawTape(ctx, x, y, rot, tw, th, R);
+    }
+    // crimps
+    for (let i = 0; i < st.crimps; i++) {
+      const horiz = R() < 0.6, a = (horiz ? 0 : Math.PI / 2) + (R() - 0.5) * 0.35;
+      const cx = W / 2 + (R() - 0.5) * W * 0.6, cy = H / 2 + (R() - 0.5) * H * 0.6, L = 1400;
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(a);
+      ctx.lineCap = 'butt';
+      ctx.strokeStyle = 'rgba(0,0,0,0.22)'; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(-L, 3); ctx.lineTo(L, 3); ctx.stroke();
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-L, 1); ctx.lineTo(L, 1); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,0.45)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-L, -2); ctx.lineTo(L, -2); ctx.stroke();
+      for (let k = 0; k < 24; k++) { const px = -L / 2 + R() * L; ctx.strokeStyle = `rgba(0,0,0,${0.05 + R() * 0.15})`; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(px, -8 - R() * 10); ctx.lineTo(px + (R() - 0.5) * 6, 8 + R() * 10); ctx.stroke(); }
+      ctx.restore();
+    }
+  }
+
+  function drawTape(ctx, x, y, rot, tw, th, R) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
+    ctx.globalAlpha = 0.55; ctx.fillStyle = 'rgb(232,222,190)';
+    ctx.beginPath(); ctx.moveTo(-tw / 2, -th / 2);
+    for (let k = 0; k <= 6; k++) ctx.lineTo(tw / 2 + (k % 2 ? 3 : -3), -th / 2 + th * k / 6);
+    ctx.lineTo(-tw / 2, th / 2);
+    for (let k = 6; k >= 0; k--) ctx.lineTo(-tw / 2 + (k % 2 ? 3 : -3), -th / 2 + th * k / 6);
+    ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 0.18; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
+    for (let k = 0; k < th; k += 4) { ctx.beginPath(); ctx.moveTo(-tw / 2, -th / 2 + k); ctx.lineTo(tw / 2, -th / 2 + k + 1); ctx.stroke(); }
+    ctx.globalAlpha = 0.25; ctx.strokeStyle = '#9a8f6a'; ctx.strokeRect(-tw / 2, -th / 2, tw, th);
+    ctx.restore();
+  }
+
+  // ---------- poker card base ----------
+  function drawPoker(ctx, st, R) {
+    const red = st.pokerColor === 'red', col = red ? '#b3202c' : '#1f3f8f';
+    ctx.fillStyle = '#f7f4ec'; ctx.beginPath(); ctx.roundRect(0, 0, W, H, 30); ctx.fill();
+    const p = 34;
+    ctx.fillStyle = col; ctx.beginPath(); ctx.roundRect(p, p, W - 2 * p, H - 2 * p, 10); ctx.fill();
+    ctx.save(); ctx.beginPath(); ctx.roundRect(p + 4, p + 4, W - 2 * p - 8, H - 2 * p - 8, 8); ctx.clip();
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 2;
+    for (let k = -H; k < W + H; k += 22) { ctx.beginPath(); ctx.moveTo(k, p); ctx.lineTo(k + H, H); ctx.stroke(); ctx.beginPath(); ctx.moveTo(k, H); ctx.lineTo(k + H, p); ctx.stroke(); }
+    ctx.restore();
+    ctx.strokeStyle = '#f7f4ec'; ctx.lineWidth = 4; ctx.strokeRect(p + 12, p + 12, W - 2 * p - 24, H - 2 * p - 24);
+    ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.roundRect(1, 1, W - 2, H - 2, 30); ctx.stroke();
+  }
+
+  // ---------- compose ----------
+  function render(target, s) {
+    const st = S(); const paper = paperFor(st);
+    const cw = W * s, ch = H * s;
+    const R = rng(seed);
+
+    const card = document.createElement('canvas'); card.width = cw; card.height = ch;
+    const cx = card.getContext('2d', { willReadFrequently: true });
+    drawCard(cx, s, st);
+    pixelPass(cx, cw, ch, st, R, paper);
+    if (st.treat === 'banding') bandingPass(cx, cw, ch, st, R, paper);
+    if (st.treat === 'negative') invertPass(cx, cw, ch);
+
+    target.width = cw; target.height = ch;
+    const ctx = target.getContext('2d', { willReadFrequently: true });
+    ctx.save(); ctx.scale(s, s);
+
+    // miscut offset (from seed)
+    const mc = st.miscut, ang = R() * Math.PI * 2, dxm = Math.cos(ang) * 60 * mc, dym = Math.sin(ang) * 60 * mc;
+
+    if (st.treat === 'poker') {
+      drawPoker(ctx, st, R);
+      const k = 0.86, rot = (R() - 0.5) * 0.08;
+      ctx.save(); ctx.translate(W / 2 + dxm * 0.3, H / 2 + dym * 0.3); ctx.rotate(rot);
+      ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = 10; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 4;
+      ctx.drawImage(card, -W * k / 2, -H * k / 2, W * k, H * k);
+      ctx.shadowColor = 'transparent';
+      ctx.restore();
+      // the taped-on cut-out gets its own tape regardless of the slider
+      ctx.save(); ctx.translate(W / 2 + dxm * 0.3, H / 2 + dym * 0.3); ctx.rotate(rot);
+      const n = Math.max(2, st.tape);
+      for (let i = 0; i < n; i++) {
+        const corner = i % 4, sx = corner % 2 ? 1 : -1, sy = corner < 2 ? -1 : 1;
+        if (i < 4) drawTape(ctx, sx * W * k / 2 + (R() - 0.5) * 30, sy * H * k / 2 + (R() - 0.5) * 30, (sx * sy > 0 ? -1 : 1) * Math.PI / 4 + (R() - 0.5) * 0.3, 150 + R() * 60, 46 + R() * 14, R);
+        else drawTape(ctx, (R() - 0.5) * W * k, sy * H * k / 2, (R() - 0.5) * 0.3, 140 + R() * 60, 46 + R() * 14, R);
+      }
+      ctx.restore();
+      const st2 = Object.assign({}, st, { tape: 0 });
+      damage(ctx, st2, R);
+    } else {
+      ctx.fillStyle = st.treat === 'negative' ? rgb(INK) : rgb(paper); ctx.fillRect(0, 0, W, H);
+      if (mc > 0) { // neighbouring card outline shows on the exposed strip
+        ctx.strokeStyle = st.treat === 'negative' ? rgb(paper) : rgb(INK); ctx.lineWidth = 2;
+        const gx = dxm > 0 ? -(W + 8) : (W + 8), gy = dym > 0 ? -(H + 8) : (H + 8);
+        ctx.beginPath(); ctx.roundRect(gx + dxm + 7, dym + 7, W - 14, H - 14, 22); ctx.stroke();
+        ctx.beginPath(); ctx.roundRect(dxm + 7, gy + dym + 7, W - 14, H - 14, 22); ctx.stroke();
+        ctx.beginPath(); ctx.roundRect(gx + dxm + 7, gy + dym + 7, W - 14, H - 14, 22); ctx.stroke();
+      }
+      ctx.drawImage(card, dxm, dym, W, H);
+      damage(ctx, st, R);
+    }
+
+    if (st.vignette > 0) {
+      const gr = ctx.createRadialGradient(W / 2, H / 2, W * 0.35, W / 2, H / 2, W * 0.95);
+      gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, `rgba(0,0,0,${st.vignette * 0.55})`);
+      ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H);
+    }
+    ctx.restore();
+  }
+
+  const preview = $('preview');
+  const schedule = () => { clearTimeout(timer); timer = setTimeout(() => render(preview, 1), 60); };
+
+  for (const id of ids) {
+    const el = $(id);
+    el.addEventListener('input', () => {
+      if (el.type === 'range') el.parentElement.querySelector('output').textContent = el.step === '1' ? el.value : parseFloat(el.value).toFixed(2);
+      if (id === 'customFlag') $('customWrap').hidden = !el.checked;
+      schedule();
+    });
+  }
+  const loadFile = f => { if (!f || !f.type.startsWith('image/')) return;
+    const url = URL.createObjectURL(f); const im = new Image();
+    im.onload = () => { img = im; URL.revokeObjectURL(url); schedule(); }; im.src = url; };
+  const drop = $('drop');
+  drop.addEventListener('click', () => $('file').click());
+  $('file').addEventListener('change', e => loadFile(e.target.files[0]));
+  drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+  drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); loadFile(e.dataTransfer.files[0]); });
+  document.addEventListener('paste', e => { const it = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/')); if (it) loadFile(it.getAsFile()); });
+
+  $('reroll').addEventListener('click', () => { seed = (seed * 16807 + 11) % 2147483647; schedule(); });
+  $('download').addEventListener('click', () => {
+    const c = document.createElement('canvas'); render(c, parseFloat($('dpi').value));
+    const st = S(), a = document.createElement('a');
+    const nm = (st.customFlag && st.customName.trim() ? st.customName : st.name).trim().replace(/[^\w-]+/g, '_') || 'card';
+    a.download = `${nm}.png`; a.href = c.toDataURL('image/png'); a.click();
+  });
+  $('reset').addEventListener('click', () => {
+    for (const id of ['customName','name','cost','pt','type','rules','flavor','annotation','number','setcode','footer']) $(id).value = '';
+    $('customFlag').checked = false; $('customWrap').hidden = true; img = null; $('file').value = ''; schedule();
+  });
+
+  // ---------- Scryfall ----------
+  const API = 'https://api.scryfall.com';
+  const status = msg => { $('status').textContent = msg; };
+  const symbol = t => {
+    if (t === 'T') return 'TAP'; if (t === 'Q') return 'UNTAP'; if (t === 'C') return '\u25C7'; if (t === 'E') return 'ENERGY';
+    if (t === 'P') return '\u03A6';
+    return t.replace(/\/P$/, '\u03A6').replace('/', '/');
+  };
+  const cost = c => (c || '').replace(/\{([^}]+)\}/g, (_, t) => symbol(t));
+  const oracle = t => (t || '').replace(/\{([^}]+)\}/g, (_, t) => symbol(t));
+  let acTimer = null, loaded = null;
+  $('lookup').addEventListener('input', () => {
+    clearTimeout(acTimer); const q = $('lookup').value.trim(); if (q.length < 2) return;
+    acTimer = setTimeout(async () => {
+      try { const r = await fetch(`${API}/cards/autocomplete?q=${encodeURIComponent(q)}`); const j = await r.json();
+        const list = $('acList'); list.innerHTML = '';
+        for (const n of (j.data || [])) { const d = document.createElement('div'); d.textContent = n;
+          d.addEventListener('mousedown', e => { e.preventDefault(); $('lookup').value = n; list.style.display = 'none'; loadByName(); });
+          list.appendChild(d); }
+        list.style.display = list.children.length ? 'block' : 'none';
+      } catch (e) { /* offline */ }
+    }, 250);
+  });
+  $('lookup').addEventListener('blur', () => { $('acList').style.display = 'none'; });
+  $('lookup').addEventListener('focus', () => { if ($('acList').children.length) $('acList').style.display = 'block'; });
+  $('lookup').addEventListener('keydown', e => {
+    const list = $('acList'), items = [...list.children]; if (!items.length || list.style.display === 'none') return;
+    let i = items.findIndex(d => d.classList.contains('sel'));
+    if (e.key === 'ArrowDown') { e.preventDefault(); i = Math.min(items.length - 1, i + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); i = Math.max(0, i - 1); }
+    else if (e.key === 'Enter' && i >= 0) { e.preventDefault(); $('lookup').value = items[i].textContent; list.style.display = 'none'; loadByName(); return; }
+    else if (e.key === 'Escape') { list.style.display = 'none'; return; }
+    else return;
+    items.forEach((d, k) => d.classList.toggle('sel', k === i));
+  });
+  function fillFrom(card) {
+    const face = card.card_faces && card.card_faces.length && !card.oracle_text ? card.card_faces[0] : card;
+    $('name').value = face.name || card.name || '';
+    $('cost').value = cost(face.mana_cost);
+    $('type').value = face.type_line || card.type_line || '';
+    $('rules').value = oracle(face.oracle_text);
+    $('flavor').value = face.flavor_text || '';
+    $('pt').value = face.power !== undefined ? `${face.power}/${face.toughness}` : (face.loyalty || card.loyalty || '');
+    $('number').value = card.collector_number || '';
+    $('setcode').value = (card.set || '').toUpperCase();
+    const tl = (face.type_line || '').toLowerCase();
+    if (tl.startsWith('land') || tl.includes('— land') || tl.includes('basic land')) $('layout').value = 'land';
+    else if ($('layout').value === 'land') $('layout').value = 'standard';
+    schedule();
+    loaded = { card, face };
+    status(`Loaded ${card.name} (${card.set_name}). "Load artwork" loads its printed picture.`);
+  }
+  function loadArt() {
+    if (!loaded) { status('Load a card first.'); return; }
+    const { card, face } = loaded, uris = face.image_uris || card.image_uris;
+    if (!uris) { status('No artwork available for this printing.'); return; }
+    status('Loading artwork…');
+    const im = new Image(); im.crossOrigin = 'anonymous';
+    im.onload = () => { img = im; schedule(); status(`Artwork of ${card.name} (${card.set_name}) loaded.`); };
+    im.onerror = () => status('Artwork blocked by the browser (cross-origin). Upload it manually.');
+    im.src = uris.art_crop;
+  }
+  async function loadCard(url) {
+    status('Loading…');
+    try { const r = await fetch(url); const j = await r.json();
+      if (j.object === 'error') { status(j.details || 'Card not found.'); return; }
+      fillFrom(j);
+    } catch (e) { status('Scryfall not reachable. Check the connection.'); }
+  }
+  function loadByName() {
+    const q = $('lookup').value.trim(); if (!q) { status('Enter a card name.'); return; }
+    const set = $('lookupSet').value.trim().toLowerCase();
+    loadCard(`${API}/cards/named?fuzzy=${encodeURIComponent(q)}${set ? '&set=' + encodeURIComponent(set) : ''}`);
+  }
+  $('loadArt').addEventListener('click', loadArt);
+  $('lookup').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.defaultPrevented) loadByName(); });
+  $('randomCard').addEventListener('click', () => loadCard(`${API}/cards/random`));
+
+  render(preview, 1);
+})();
+</script>
+</body>
+</html>
