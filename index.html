@@ -22,6 +22,12 @@
   .ac-list{position:absolute;left:0;right:0;top:100%;z-index:5;background:var(--field);border:1px solid var(--line);border-top:0;max-height:220px;overflow-y:auto;display:none}
   .ac-list div{padding:6px 8px;cursor:pointer;font-size:13px}
   .ac-list div:hover,.ac-list div.sel{background:#dfe2e6}
+  .collist{margin:10px 0 0;border:1px solid var(--line);max-height:200px;overflow-y:auto}
+  .collist:empty{display:none}
+  .colitem{display:flex;align-items:center;gap:6px;padding:5px 8px;font-size:13px;border-bottom:1px solid #e2e5e8}
+  .colitem:last-child{border-bottom:0}
+  .colitem span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .colitem button{padding:2px 7px;font-size:12px;background:transparent;color:var(--ink)}
   summary::-webkit-details-marker{display:none}
   summary::before{content:"";width:0;height:0;margin-left:2px;border-left:5px solid var(--ink);border-top:4px solid transparent;border-bottom:4px solid transparent;transition:transform .12s}
   details[open] summary::before{transform:rotate(90deg)}
@@ -181,6 +187,23 @@
     <div class="actions" style="margin-top:8px"><button class="secondary" id="reroll" type="button">Re-roll texture</button></div>
   </details>
 
+  <details>
+    <summary>Collection (session only)</summary>
+    <div class="actions">
+      <button id="addCard" type="button">Add current card</button>
+      <button class="secondary" id="clearCol" type="button">Empty</button>
+    </div>
+    <div class="collist" id="colList"></div>
+    <div class="actions" style="margin-top:10px">
+      <button class="secondary" id="sheetBtn" type="button">A4 sheet (9 per page)</button>
+      <button class="secondary" id="expJson" type="button">Download JSON</button>
+      <button class="secondary" id="impJson" type="button">Load JSON</button>
+      <input type="file" id="impFile" accept="application/json,.json" hidden>
+    </div>
+    <div class="status" id="colStatus"></div>
+    <p class="hint">The collection is kept in memory only and is lost when the page is closed. The JSON contains the picture, so it is a few MB per card.</p>
+  </details>
+
   <details open>
     <summary>Export</summary>
     <label for="dpi">Resolution</label>
@@ -213,7 +236,7 @@
                'fit','zoom','offx','offy','dither','dot','contrast','bright','invert','artBorder',
                'grain','toner','specks','vignette','yellow','band',
                'scratch','tape','drops','thumbs','smears','miscut','crimps','dpi'];
-  let img = null, seed = 1, timer = null;
+  let img = null, imgData = null, seed = 1, timer = null, collection = [];
 
   const S = () => { const o = {}; for (const id of ids) { const el = $(id);
       o[id] = el.type === 'checkbox' ? el.checked : (el.type === 'range' ? parseFloat(el.value) : el.value); } return o; };
@@ -515,8 +538,15 @@
   }
 
   // ---------- compose ----------
-  function render(target, s) {
-    const st = S(); const paper = paperFor(st);
+  function render(target, s, stOv, imgOv, seedOv) {
+    const oldImg = img, oldSeed = seed;
+    if (imgOv !== undefined) img = imgOv;
+    if (seedOv !== undefined) seed = seedOv;
+    try { renderBody(target, s, stOv || S()); }
+    finally { img = oldImg; seed = oldSeed; }
+  }
+  function renderBody(target, s, st) {
+    const paper = paperFor(st);
     const cw = W * s, ch = H * s;
     const R = rng(seed);
 
@@ -585,9 +615,15 @@
       schedule();
     });
   }
+  const setImage = dataUrl => new Promise(res => {
+    if (!dataUrl) { img = null; imgData = null; schedule(); res(); return; }
+    const im = new Image();
+    im.onload = () => { img = im; imgData = dataUrl; schedule(); res(); };
+    im.onerror = () => res();
+    im.src = dataUrl;
+  });
   const loadFile = f => { if (!f || !f.type.startsWith('image/')) return;
-    const url = URL.createObjectURL(f); const im = new Image();
-    im.onload = () => { img = im; URL.revokeObjectURL(url); schedule(); }; im.src = url; };
+    const fr = new FileReader(); fr.onload = () => setImage(fr.result); fr.readAsDataURL(f); };
   const drop = $('drop');
   drop.addEventListener('click', () => $('file').click());
   $('file').addEventListener('change', e => loadFile(e.target.files[0]));
@@ -605,7 +641,7 @@
   });
   $('reset').addEventListener('click', () => {
     for (const id of ['customName','name','cost','pt','type','rules','flavor','annotation','number','setcode','footer']) $(id).value = '';
-    $('customFlag').checked = false; $('customWrap').hidden = true; img = null; $('file').value = ''; schedule();
+    $('customFlag').checked = false; $('customWrap').hidden = true; img = null; imgData = null; $('file').value = ''; schedule();
   });
 
   // ---------- Scryfall ----------
@@ -666,7 +702,12 @@
     if (!uris) { status('No artwork available for this printing.'); return; }
     status('Loading artwork…');
     const im = new Image(); im.crossOrigin = 'anonymous';
-    im.onload = () => { img = im; schedule(); status(`Artwork of ${card.name} (${card.set_name}) loaded.`); };
+    im.onload = () => {
+      img = im; imgData = null;
+      try { const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight;
+        c.getContext('2d').drawImage(im, 0, 0); imgData = c.toDataURL('image/jpeg', 0.92); } catch (err) { /* tainted canvas */ }
+      schedule(); status(`Artwork of ${card.name} (${card.set_name}) loaded.`);
+    };
     im.onerror = () => status('Artwork blocked by the browser (cross-origin). Upload it manually.');
     im.src = uris.art_crop;
   }
@@ -685,6 +726,105 @@
   $('loadArt').addEventListener('click', loadArt);
   $('lookup').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.defaultPrevented) loadByName(); });
   $('randomCard').addEventListener('click', () => loadCard(`${API}/cards/random`));
+
+  // ---------- collection (session only) ----------
+  const colStatus = m => { $('colStatus').textContent = m; };
+  const cardLabel = st => ((st.customFlag && st.customName.trim() ? st.customName : st.name).trim() || 'untitled');
+  const fileSafe = n => n.replace(/[^\w-]+/g, '_') || 'card';
+
+  function setState(st) {
+    for (const id of ids) { if (!(id in st)) continue; const el = $(id);
+      if (el.type === 'checkbox') el.checked = !!st[id]; else el.value = st[id];
+      if (el.type === 'range') el.parentElement.querySelector('output').textContent = el.step === '1' ? el.value : parseFloat(el.value).toFixed(2); }
+    $('customWrap').hidden = !$('customFlag').checked;
+  }
+
+  function drawList() {
+    const l = $('colList'); l.innerHTML = '';
+    collection.forEach((c, i) => {
+      const row = document.createElement('div'); row.className = 'colitem';
+      const sp = document.createElement('span'); sp.textContent = `${i + 1}. ${cardLabel(c.st)}${c.img ? '' : ' (no picture)'}`;
+      const ld = document.createElement('button'); ld.type = 'button'; ld.textContent = 'Open';
+      ld.addEventListener('click', async () => { setState(c.st); seed = c.seed; await setImage(c.img); colStatus(`Opened "${cardLabel(c.st)}".`); });
+      const up = document.createElement('button'); up.type = 'button'; up.textContent = 'Update';
+      up.addEventListener('click', () => { collection[i] = { st: S(), seed, img: imgData }; drawList(); colStatus('Card updated.'); });
+      const rm = document.createElement('button'); rm.type = 'button'; rm.textContent = '\u00D7';
+      rm.addEventListener('click', () => { collection.splice(i, 1); drawList(); colStatus(`${collection.length} card(s) in the collection.`); });
+      row.append(sp, ld, up, rm); l.appendChild(row);
+    });
+  }
+
+  $('addCard').addEventListener('click', () => {
+    const st = S();
+    collection.push({ st, seed, img: imgData });
+    drawList();
+    colStatus(`"${cardLabel(st)}" added.${imgData ? '' : ' Picture not stored (loaded from Scryfall without CORS permission).'} ${collection.length} card(s).`);
+  });
+  $('clearCol').addEventListener('click', () => { collection = []; drawList(); colStatus('Collection emptied.'); });
+
+  // JSON with pictures
+  $('expJson').addEventListener('click', () => {
+    if (!collection.length) { colStatus('The collection is empty.'); return; }
+    const blob = new Blob([JSON.stringify({ app: 'sinthan-z-proxy-builder', version: 1, cards: collection }, null, 1)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `proxies-${collection.length}-cards.json`; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    colStatus(`${collection.length} card(s) exported.`);
+  });
+  $('impJson').addEventListener('click', () => $('impFile').click());
+  $('impFile').addEventListener('change', e => {
+    const f = e.target.files[0]; if (!f) return;
+    const fr = new FileReader();
+    fr.onload = () => {
+      try { const j = JSON.parse(fr.result);
+        const cards = Array.isArray(j) ? j : j.cards;
+        if (!Array.isArray(cards)) throw 0;
+        collection = collection.concat(cards.filter(c => c && c.st));
+        drawList(); colStatus(`${cards.length} card(s) loaded. ${collection.length} in the collection.`);
+      } catch (err) { colStatus('Unreadable file.'); }
+      $('impFile').value = '';
+    };
+    fr.readAsText(f);
+  });
+
+  // A4 sheet, 3 x 3
+  $('sheetBtn').addEventListener('click', async () => {
+    if (!collection.length) { colStatus('The collection is empty.'); return; }
+    const s = parseFloat($('dpi').value);
+    const AW = Math.round(2480 * s), AH = Math.round(3508 * s);   // A4 at 300 / 600 dpi
+    const cw = W * s, ch = H * s;
+    const gx = (AW - 3 * cw) / 2, gy = (AH - 3 * ch) / 2;
+    const pages = Math.ceil(collection.length / 9);
+    for (let p = 0; p < pages; p++) {
+      colStatus(`Generating page ${p + 1} of ${pages}…`);
+      await new Promise(r => setTimeout(r, 20));
+      const sheet = document.createElement('canvas'); sheet.width = AW; sheet.height = AH;
+      const sc = sheet.getContext('2d');
+      sc.fillStyle = '#ffffff'; sc.fillRect(0, 0, AW, AH);
+      const slice = collection.slice(p * 9, p * 9 + 9);
+      for (let i = 0; i < slice.length; i++) {
+        const c = slice[i];
+        let im = null;
+        if (c.img) im = await new Promise(res => { const x = new Image(); x.onload = () => res(x); x.onerror = () => res(null); x.src = c.img; });
+        const tmp = document.createElement('canvas');
+        render(tmp, s, c.st, im, c.seed);
+        const x = gx + (i % 3) * cw, y = gy + Math.floor(i / 3) * ch;
+        sc.drawImage(tmp, x, y);
+      }
+      // crop marks
+      sc.strokeStyle = '#000'; sc.lineWidth = Math.max(1, s);
+      const t = 30 * s;
+      for (let i = 0; i <= 3; i++) {
+        const x = gx + i * cw, y = gy + i * ch;
+        sc.beginPath(); sc.moveTo(x, gy - t); sc.lineTo(x, gy - 6 * s); sc.moveTo(x, gy + 3 * ch + 6 * s); sc.lineTo(x, gy + 3 * ch + t); sc.stroke();
+        sc.beginPath(); sc.moveTo(gx - t, y); sc.lineTo(gx - 6 * s, y); sc.moveTo(gx + 3 * cw + 6 * s, y); sc.lineTo(gx + 3 * cw + t, y); sc.stroke();
+      }
+      const a = document.createElement('a');
+      a.download = `proxy-sheet-${p + 1}.png`; a.href = sheet.toDataURL('image/png'); a.click();
+      await new Promise(r => setTimeout(r, 400));
+    }
+    colStatus(`${pages} page(s) generated, ${collection.length} card(s).`);
+  });
 
   render(preview, 1);
 })();
