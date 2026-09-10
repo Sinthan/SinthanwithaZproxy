@@ -195,12 +195,15 @@
     </div>
     <div class="collist" id="colList"></div>
     <div class="actions" style="margin-top:10px">
-      <button class="secondary" id="sheetBtn" type="button">A4 sheet (9 per page)</button>
+      <button class="secondary" id="sheetPdf" type="button">A4 sheet PDF</button>
+      <button class="secondary" id="sheetPng" type="button">A4 sheet PNG</button>
+      <button class="secondary" id="sheetPrint" type="button">Print</button>
       <button class="secondary" id="expJson" type="button">Download JSON</button>
       <button class="secondary" id="impJson" type="button">Load JSON</button>
       <input type="file" id="impFile" accept="application/json,.json" hidden>
     </div>
     <div class="status" id="colStatus"></div>
+    <p class="hint">A4 sheet: 3 × 3 cards at real size with crop marks. PDF embeds the pages as JPEG; Print opens the browser dialog with lossless pages (from there, "Save as PDF" or print directly).</p>
     <p class="hint">The collection is kept in memory only and is lost when the page is closed. The JSON contains the picture, so it is a few MB per card.</p>
   </details>
 
@@ -788,15 +791,14 @@
   });
 
   // A4 sheet, 3 x 3
-  $('sheetBtn').addEventListener('click', async () => {
-    if (!collection.length) { colStatus('The collection is empty.'); return; }
+  async function buildSheets() {
     const s = parseFloat($('dpi').value);
     const AW = Math.round(2480 * s), AH = Math.round(3508 * s);   // A4 at 300 / 600 dpi
     const cw = W * s, ch = H * s;
     const gx = (AW - 3 * cw) / 2, gy = (AH - 3 * ch) / 2;
-    const pages = Math.ceil(collection.length / 9);
+    const pages = Math.ceil(collection.length / 9), out = [];
     for (let p = 0; p < pages; p++) {
-      colStatus(`Generating page ${p + 1} of ${pages}…`);
+      colStatus(`Generating page ${p + 1} of ${pages}\u2026`);
       await new Promise(r => setTimeout(r, 20));
       const sheet = document.createElement('canvas'); sheet.width = AW; sheet.height = AH;
       const sc = sheet.getContext('2d');
@@ -808,10 +810,8 @@
         if (c.img) im = await new Promise(res => { const x = new Image(); x.onload = () => res(x); x.onerror = () => res(null); x.src = c.img; });
         const tmp = document.createElement('canvas');
         render(tmp, s, c.st, im, c.seed);
-        const x = gx + (i % 3) * cw, y = gy + Math.floor(i / 3) * ch;
-        sc.drawImage(tmp, x, y);
+        sc.drawImage(tmp, gx + (i % 3) * cw, gy + Math.floor(i / 3) * ch);
       }
-      // crop marks
       sc.strokeStyle = '#000'; sc.lineWidth = Math.max(1, s);
       const t = 30 * s;
       for (let i = 0; i <= 3; i++) {
@@ -819,11 +819,86 @@
         sc.beginPath(); sc.moveTo(x, gy - t); sc.lineTo(x, gy - 6 * s); sc.moveTo(x, gy + 3 * ch + 6 * s); sc.lineTo(x, gy + 3 * ch + t); sc.stroke();
         sc.beginPath(); sc.moveTo(gx - t, y); sc.lineTo(gx - 6 * s, y); sc.moveTo(gx + 3 * cw + 6 * s, y); sc.lineTo(gx + 3 * cw + t, y); sc.stroke();
       }
-      const a = document.createElement('a');
-      a.download = `proxy-sheet-${p + 1}.png`; a.href = sheet.toDataURL('image/png'); a.click();
+      out.push(sheet);
+    }
+    return out;
+  }
+
+  const saveBlob = (blob, filename) => {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 8000);
+  };
+
+  // minimal PDF writer: one A4 page per sheet, image embedded as JPEG (DCTDecode)
+  async function sheetsToPdf(sheets) {
+    const PW = 595.28, PH = 841.89;                       // A4 in points
+    const enc = new TextEncoder(), parts = []; let len = 0;
+    const push = u8 => { parts.push(u8); len += u8.length; };
+    const put = str => push(enc.encode(str));
+    const offsets = [0];
+    const obj = (id, body, stream) => {
+      offsets[id] = len;
+      put(`${id} 0 obj\n${body}\n`);
+      if (stream) { put('stream\n'); push(stream); put('\nendstream\n'); }
+      put('endobj\n');
+    };
+    push(new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34, 0x0A, 0x25, 0xE2, 0xE3, 0xCF, 0xD3, 0x0A]));
+
+    const jpegs = [];
+    for (const sh of sheets) {
+      const blob = await new Promise(r => sh.toBlob(r, 'image/jpeg', 0.95));
+      jpegs.push(new Uint8Array(await blob.arrayBuffer()));
+    }
+    const kids = sheets.map((_, i) => `${3 + i * 3} 0 R`).join(' ');
+    obj(1, '<< /Type /Catalog /Pages 2 0 R >>');
+    obj(2, `<< /Type /Pages /Kids [${kids}] /Count ${sheets.length} >>`);
+    sheets.forEach((sh, i) => {
+      const pid = 3 + i * 3, cid = pid + 1, iid = pid + 2;
+      obj(pid, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PW} ${PH}] /Resources << /XObject << /Im0 ${iid} 0 R >> >> /Contents ${cid} 0 R >>`);
+      const content = enc.encode(`q ${PW} 0 0 ${PH} 0 0 cm /Im0 Do Q`);
+      obj(cid, `<< /Length ${content.length} >>`, content);
+      obj(iid, `<< /Type /XObject /Subtype /Image /Width ${sh.width} /Height ${sh.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpegs[i].length} >>`, jpegs[i]);
+    });
+    const n = 2 + sheets.length * 3, xref = len;
+    let x = `xref\n0 ${n + 1}\n0000000000 65535 f \n`;
+    for (let i = 1; i <= n; i++) x += String(offsets[i]).padStart(10, '0') + ' 00000 n \n';
+    put(x + `trailer\n<< /Size ${n + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
+    return new Blob(parts, { type: 'application/pdf' });
+  }
+
+  $('sheetPdf').addEventListener('click', async () => {
+    if (!collection.length) { colStatus('The collection is empty.'); return; }
+    const sheets = await buildSheets();
+    colStatus('Writing the PDF\u2026');
+    saveBlob(await sheetsToPdf(sheets), `proxy-sheets-${collection.length}-cards.pdf`);
+    colStatus(`PDF with ${sheets.length} page(s), ${collection.length} card(s).`);
+  });
+
+  $('sheetPng').addEventListener('click', async () => {
+    if (!collection.length) { colStatus('The collection is empty.'); return; }
+    const sheets = await buildSheets();
+    for (let i = 0; i < sheets.length; i++) {
+      await new Promise(r => sheets[i].toBlob(b => { saveBlob(b, `proxy-sheet-${i + 1}.png`); r(); }, 'image/png'));
       await new Promise(r => setTimeout(r, 400));
     }
-    colStatus(`${pages} page(s) generated, ${collection.length} card(s).`);
+    colStatus(`${sheets.length} page(s) generated.`);
+  });
+
+  $('sheetPrint').addEventListener('click', async () => {
+    if (!collection.length) { colStatus('The collection is empty.'); return; }
+    const sheets = await buildSheets();
+    const w = window.open('', '_blank');
+    if (!w) { colStatus('The browser blocked the new window. Allow pop-ups for this site.'); return; }
+    const imgs = sheets.map(sh => `<img src="${sh.toDataURL('image/png')}">`).join('');
+    w.document.write(`<!doctype html><title>Proxy sheets</title><style>
+      @page{size:A4;margin:0}
+      html,body{margin:0;padding:0;background:#fff}
+      img{display:block;width:210mm;height:297mm;page-break-after:always}
+      img:last-child{page-break-after:auto}
+    </style>${imgs}`);
+    w.document.close();
+    w.onload = () => { w.focus(); w.print(); };
+    colStatus(`${sheets.length} page(s) sent to the print dialog.`);
   });
 
   render(preview, 1);
