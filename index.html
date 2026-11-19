@@ -2,64 +2,111 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#efe9db" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#171716" media="(prefers-color-scheme: dark)">
 <title>Sinthan's but with a Z proxy builder</title>
 <style>
-  :root{ --bench:#cfd2d6; --panel:#eceef0; --line:#8a8f96; --ink:#141414; --mute:#5b6067; --field:#ffffff; }
+  :root{color-scheme:light dark;--paper:#efe9db;--desk:#e3dbc7;--ink:#141414;--line:rgba(20,20,20,.28);--mute:rgba(20,20,20,.62);--field:#f7f3e8;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,"Helvetica Neue",Arial,sans-serif;--mono:ui-monospace,"SF Mono",Menlo,"Courier New",monospace}
+  @media (prefers-color-scheme:dark){:root{--paper:#171716;--desk:#0d0d0c;--ink:#ebe5d5;--line:rgba(235,229,213,.28);--mute:rgba(235,229,213,.62);--field:#201f1d}}
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
-  body{font:14px/1.45 "Helvetica Neue",Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bench);
-    display:grid;grid-template-columns:410px 1fr;height:100vh;overflow:hidden}
-  aside{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;padding:18px 20px 40px}
-  main{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px;overflow:auto}
-  h1{font-size:15px;font-weight:700;margin:0 0 14px}
-  details{border:1px solid var(--line);background:var(--field);margin:0 0 10px;padding:0 12px 10px;border-radius:3px}
+  body{font:14px/1.45 var(--sans);color:var(--ink);background:var(--paper);display:grid;grid-template-columns:420px 1fr;height:100vh;overflow:hidden;-webkit-text-size-adjust:100%}
+  aside{border-right:1.5px solid var(--ink);overflow-y:auto;padding:16px 16px 40px}
+  main{position:relative;background:var(--desk);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:28px;overflow:auto;min-height:0}
+  h1{font-size:17px;font-weight:600;margin:0}
+  .mono,.range output,.status,.hint{font-family:var(--mono)}
+  .dots{height:10px;margin:10px 0 16px;background:radial-gradient(circle,var(--ink) 1.3px,transparent 1.7px) 0 0/6px 6px;-webkit-mask-image:linear-gradient(90deg,#000,transparent);mask-image:linear-gradient(90deg,#000,transparent)}
+  details{border:1.5px solid var(--ink);border-radius:12px;background:var(--paper);margin:0 0 12px;padding:0 14px 14px}
   details:not([open]){padding-bottom:0}
-  summary{font-weight:700;font-size:14px;padding:10px 0;margin:0 -12px;cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;background:#dfe2e6;border-bottom:1px solid var(--line);padding-left:12px}
-  details:not([open]) summary{border-bottom:0}
-  summary:hover{background:#d3d7dc}
+  summary{margin:0 -14px;padding:12px 14px;font-weight:600;font-size:15px;cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;border-radius:10px}
+  summary::-webkit-details-marker{display:none}
+  summary::after{content:"";width:8px;height:8px;border:solid var(--ink);border-width:0 1.5px 1.5px 0;transform:rotate(-45deg);transition:transform .15s}
+  details[open]>summary{margin-bottom:6px;border-bottom:.5px solid var(--line);border-radius:10px 10px 0 0}
+  details[open]>summary::after{transform:rotate(45deg)}
+  label{display:block;margin:8px 0 3px;color:var(--mute);font-size:12px}
+  input[type=text],textarea,select{width:100%;min-height:40px;padding:8px 10px;border:1px solid var(--ink);background:var(--field);color:var(--ink);font:inherit;border-radius:8px}
+  textarea{resize:vertical;min-height:72px}
+  ::placeholder{color:var(--mute)}
+  :is(input,textarea,select,button,summary):focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .range{display:grid;grid-template-columns:1fr auto;gap:2px 8px;align-items:center;margin-top:6px}
+  .range label{grid-area:1/1;margin:0;color:var(--ink);font-size:14px}
+  .range span{display:none}
+  .range output{grid-area:1/2;font-size:12px;color:var(--mute)}
+  .range input[type=range]{grid-area:2/1/3/3;width:100%;margin:2px 0 4px;accent-color:var(--ink)}
+  .check{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:40px;margin:4px 0}
+  .check label{order:1;flex:1;margin:0;color:var(--ink);font-size:14px}
+  .check input{order:2;appearance:none;-webkit-appearance:none;flex:none;width:48px;height:28px;margin:0;border:1.5px solid var(--ink);border-radius:14px;position:relative;cursor:pointer}
+  .check input::after{content:"";position:absolute;top:3px;left:3px;width:19px;height:19px;border-radius:50%;background:var(--ink);transition:left .12s}
+  .check input:checked{background:var(--ink)}
+  .check input:checked::after{left:23px;background:var(--paper)}
+  button{min-height:40px;padding:0 16px;border:1.5px solid var(--ink);background:var(--ink);color:var(--paper);font:inherit;font-weight:500;cursor:pointer;border-radius:10px}
+  button:active{transform:scale(.98)}
+  button.secondary{background:transparent;color:var(--ink)}
+  .actions{display:flex;gap:8px;flex-wrap:wrap}
+  .seg{display:flex;border:1.5px solid var(--ink);border-radius:9px;overflow:hidden}
+  .seg button{flex:1;min-height:36px;padding:0 4px;border:0;border-radius:0;background:transparent;color:var(--ink);font-size:13px;font-weight:400}
+  .seg button+button{border-left:1px solid var(--ink)}
+  .seg button.on{background:var(--ink);color:var(--paper)}
   .ac{position:relative}
-  .ac-list{position:absolute;left:0;right:0;top:100%;z-index:5;background:var(--field);border:1px solid var(--line);border-top:0;max-height:220px;overflow-y:auto;display:none}
-  .ac-list div{padding:6px 8px;cursor:pointer;font-size:13px}
-  .ac-list div:hover,.ac-list div.sel{background:#dfe2e6}
-  .collist{margin:10px 0 0;border:1px solid var(--line);max-height:200px;overflow-y:auto}
+  .ac-list{position:absolute;left:0;right:0;top:100%;z-index:5;background:var(--paper);border:1.5px solid var(--ink);border-radius:0 0 10px 10px;margin-top:-1px;max-height:240px;overflow-y:auto;display:none}
+  .ac-list div{padding:11px 12px;cursor:pointer;font-size:15px;border-bottom:.5px solid var(--line)}
+  .ac-list div:hover,.ac-list div.sel{background:var(--ink);color:var(--paper)}
+  .collist{margin:10px 0 0;border:1.5px solid var(--ink);border-radius:10px;max-height:200px;overflow-y:auto}
   .collist:empty{display:none}
-  .colitem{display:flex;align-items:center;gap:6px;padding:5px 8px;font-size:13px;border-bottom:1px solid #e2e5e8}
+  .colitem{display:flex;align-items:center;gap:6px;padding:6px 8px;font-size:13px;border-bottom:.5px solid var(--line)}
   .colitem:last-child{border-bottom:0}
   .colitem span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .colitem button{padding:2px 7px;font-size:12px;background:transparent;color:var(--ink)}
-  summary::-webkit-details-marker{display:none}
-  summary::before{content:"";width:0;height:0;margin-left:2px;border-left:5px solid var(--ink);border-top:4px solid transparent;border-bottom:4px solid transparent;transition:transform .12s}
-  details[open] summary::before{transform:rotate(90deg)}
-  .status{font-size:12px;color:var(--mute);min-height:16px;margin-top:6px}
-  label{display:block;margin:6px 0 2px;color:var(--mute);font-size:12px}
-  input[type=text],textarea,select{width:100%;padding:6px 8px;border:1px solid var(--line);background:var(--field);color:var(--ink);font:inherit;border-radius:2px}
-  textarea{resize:vertical;min-height:70px}
-  input:focus,textarea:focus,select:focus,button:focus{outline:2px solid var(--ink);outline-offset:1px}
-  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  .range{display:grid;grid-template-columns:1fr 46px;gap:8px;align-items:center}
-  .range input[type=range]{width:100%;margin:0}
-  .range output{font-size:12px;color:var(--mute);text-align:right;font-variant-numeric:tabular-nums}
-  .check{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px}
-  .check label{margin:0;color:var(--ink)}
-  .check input{margin:0}
-  button{padding:8px 14px;border:1px solid var(--ink);background:var(--ink);color:#fff;font:inherit;cursor:pointer;border-radius:2px}
-  button.secondary{background:transparent;color:var(--ink)}
-  .actions{display:flex;gap:10px;flex-wrap:wrap}
-  #preview{max-height:calc(100vh - 100px);max-width:100%;box-shadow:0 10px 30px rgba(0,0,0,.35);background:#fff}
-  .hint{font-size:12px;color:var(--mute);margin:4px 0 0}
-  .drop{border:1px dashed var(--line);padding:14px;text-align:center;color:var(--mute);font-size:12px;cursor:pointer;background:var(--field)}
-  .drop.over{border-color:var(--ink);color:var(--ink)}
+  .colitem button{min-height:30px;padding:0 9px;font-size:12px;background:transparent;color:var(--ink);border-radius:7px}
+  .status{font-size:11px;color:var(--mute);min-height:16px;margin-top:6px}
+  .hint{font-size:11px;color:var(--mute);margin:6px 0 0;line-height:1.5}
+  .drop{border:1.5px dashed var(--ink);border-radius:12px;padding:18px 14px;text-align:center;color:var(--mute);font-size:13px;cursor:pointer;background:var(--field);margin-top:8px}
+  .drop.over{background:var(--ink);color:var(--paper)}
   .drop input{display:none}
-  @media (max-width:900px){ body{grid-template-columns:1fr;grid-template-rows:auto 1fr;overflow:auto;height:auto}
-    aside{border-right:0;border-bottom:1px solid var(--line)} #preview{max-height:80vh} }
+  .sheet{position:relative;padding:16px;display:flex}
+  .cm{position:absolute;width:12px;height:12px;border:0 solid var(--ink)}
+  .cm.tl{left:0;top:0;border-width:1px 0 0 1px}.cm.tr{right:0;top:0;border-width:1px 1px 0 0}
+  .cm.bl{left:0;bottom:0;border-width:0 0 1px 1px}.cm.br{right:0;bottom:0;border-width:0 1px 1px 0}
+  #preview{display:block;max-height:calc(100vh - 170px);max-width:100%;background:#efe9db;box-shadow:4px 4px 0 var(--ink)}
+  .bar{display:flex;gap:8px;padding:6px;border:1.5px solid var(--ink);border-radius:14px;background:var(--paper)}
+  #toast{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);font:12px var(--mono);background:var(--ink);color:var(--paper);padding:6px 12px;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap}
+  #toast.on{opacity:1}
+  .mtop,nav{display:none}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+  @media (max-width:800px){
+    body{display:flex;flex-direction:column;height:100vh;height:100dvh}
+    .mtop{display:flex;order:0;justify-content:space-between;align-items:baseline;gap:8px;padding:max(10px,env(safe-area-inset-top)) 16px 10px;border-bottom:1.5px solid var(--ink)}
+    .mtop b{font-weight:600;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    main{order:1;flex:0 0 40%;padding:10px;gap:8px;border-bottom:1.5px solid var(--ink)}
+    .sheet{flex:1 1 0;min-height:0;padding:8px;justify-content:center}
+    #preview{height:100%;width:auto;max-height:none;aspect-ratio:744/1039;object-fit:contain}
+    .bar{padding:4px}
+    aside{order:2;flex:1 1 0;min-height:0;border-right:0;padding:12px 12px 16px}
+    aside h1,aside .dots{display:none}
+    details{display:none}
+    body[data-tab=card] details[data-tab=card],body[data-tab=picture] details[data-tab=picture],body[data-tab=look] details[data-tab=look],body[data-tab=damage] details[data-tab=damage],body[data-tab=sheet] details[data-tab=sheet]{display:block}
+    input[type=text],textarea,select{font-size:16px;min-height:44px}
+    button{min-height:44px}
+    nav{display:flex;order:3;gap:2px;padding:6px 6px max(6px,env(safe-area-inset-bottom));border-top:1.5px solid var(--ink);background:var(--paper)}
+    .tab{flex:1;min-height:48px;padding:0;border:0;border-radius:10px;background:transparent;color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;font-weight:400}
+    .tab svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+    .tab.on{background:var(--ink);color:var(--paper)}
+    main.zoom{position:fixed;inset:0;z-index:50;flex:none;overflow:auto;justify-content:flex-start;padding:16px}
+    main.zoom .sheet{flex:none}
+    main.zoom #preview{height:auto;width:min(100%,560px)}
+    main.zoom .bar{display:none}
+  }
 </style>
 </head>
-<body>
+<body data-tab="card">
+<div class="mtop"><b>Sinthan's but with a Z proxy builder</b><span class="mono">63×88</span></div>
 <aside>
-  <h1>Sinthan's but with a Z proxy builder <span style="font-weight:400;color:var(--mute)">63 × 88 mm</span></h1>
+  <h1>Sinthan's but with a Z proxy builder</h1>
+  <div class="dots" aria-hidden="true"></div>
 
-  <details open>
+  <details open data-tab="card">
     <summary>Load a card from Scryfall</summary>
     <label for="lookup">Card name</label>
     <div class="ac"><input type="text" id="lookup" placeholder="Start typing a card name, then click a suggestion (Enter loads the typed name)" autocomplete="off"><div class="ac-list" id="acList"></div></div>
@@ -70,7 +117,7 @@
     <div class="status" id="status"></div>
   </details>
 
-  <details open>
+  <details open data-tab="look">
     <summary>Frame</summary>
     <div class="row">
       <div><label for="layout">Layout</label>
@@ -114,7 +161,7 @@
     </div>
   </details>
 
-  <details>
+  <details data-tab="card">
     <summary>Card</summary>
     <div class="check"><input type="checkbox" id="customFlag"><label for="customFlag">Custom card (custom name above the real name)</label></div>
     <div id="customWrap" hidden>
@@ -143,7 +190,7 @@
     </div>
   </details>
 
-  <details>
+  <details data-tab="picture">
     <summary>Picture</summary>
     <div class="drop" id="drop"><input type="file" id="file" accept="image/*">Click, drop or paste an image</div>
     <label for="fit">Fit</label>
@@ -165,7 +212,7 @@
     <div class="check"><input type="checkbox" id="artBorder" checked><label for="artBorder">Border around picture</label></div>
   </details>
 
-  <details>
+  <details data-tab="look">
     <summary>Photocopy</summary>
     <div class="range"><label>Paper grain</label><span></span><input type="range" id="grain" min="0" max="1" step="0.01" value="0.35"><output>0.35</output></div>
     <div class="range"><label>Toner contrast</label><span></span><input type="range" id="toner" min="0" max="1" step="0.01" value="0.3"><output>0.30</output></div>
@@ -175,7 +222,7 @@
     <div class="range"><label>Banding strength</label><span></span><input type="range" id="band" min="0" max="1" step="0.01" value="0.5"><output>0.50</output></div>
   </details>
 
-  <details>
+  <details data-tab="damage">
     <summary>Damage</summary>
     <div class="range"><label>Pencil scratches</label><span></span><input type="range" id="scratch" min="0" max="1" step="0.01" value="0.3"><output>0.30</output></div>
     <div class="range"><label>Tape pieces</label><span></span><input type="range" id="tape" min="0" max="6" step="1" value="2"><output>2</output></div>
@@ -187,7 +234,7 @@
     <div class="actions" style="margin-top:8px"><button class="secondary" id="reroll" type="button">Re-roll texture</button></div>
   </details>
 
-  <details>
+  <details data-tab="sheet">
     <summary>Collection (session only)</summary>
     <div class="actions">
       <button id="addCard" type="button">Add current card</button>
@@ -207,7 +254,7 @@
     <p class="hint">The collection is kept in memory only and is lost when the page is closed. The JSON contains the picture, so it is a few MB per card.</p>
   </details>
 
-  <details open>
+  <details open data-tab="sheet">
     <summary>Export</summary>
     <label for="dpi">Resolution</label>
     <select id="dpi"><option value="1">300 dpi (744 × 1039)</option><option value="2">600 dpi (1488 × 2079)</option></select>
@@ -219,7 +266,18 @@
   </details>
 </aside>
 
-<main><canvas id="preview" width="744" height="1039"></canvas></main>
+<main>
+  <div class="sheet"><i class="cm tl"></i><i class="cm tr"></i><i class="cm bl"></i><i class="cm br"></i><canvas id="preview" width="744" height="1039" aria-label="Card preview"></canvas></div>
+  <div class="bar"><button id="tbDownload" type="button">Download PNG</button><button class="secondary" id="tbAdd" type="button">Add to collection</button></div>
+  <div id="toast" role="status"></div>
+</main>
+<nav id="tabs" aria-label="Sections">
+  <button type="button" class="tab" data-tab="card"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>Card</button>
+  <button type="button" class="tab" data-tab="picture"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4 18l5-5 4 4 3-3 4 4"/></svg>Picture</button>
+  <button type="button" class="tab" data-tab="look"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Look</button>
+  <button type="button" class="tab" data-tab="damage"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c3 4 6 7 6 11a6 6 0 0 1-12 0c0-4 3-7 6-11z"/></svg>Damage</button>
+  <button type="button" class="tab" data-tab="sheet"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 9h16M4 14h16M9 4v16M14 4v16"/></svg>Sheet</button>
+</nav>
 
 <script>
 (() => {
@@ -638,9 +696,9 @@
   $('reroll').addEventListener('click', () => { seed = (seed * 16807 + 11) % 2147483647; schedule(); });
   $('download').addEventListener('click', () => {
     const c = document.createElement('canvas'); render(c, parseFloat($('dpi').value));
-    const st = S(), a = document.createElement('a');
+    const st = S();
     const nm = (st.customFlag && st.customName.trim() ? st.customName : st.name).trim().replace(/[^\w-]+/g, '_') || 'card';
-    a.download = `${nm}.png`; a.href = c.toDataURL('image/png'); a.click();
+    c.toBlob(b => saveBlob(b, `${nm}.png`), 'image/png');
   });
   $('reset').addEventListener('click', () => {
     for (const id of ['customName','name','cost','pt','type','rules','flavor','annotation','number','setcode','footer']) $(id).value = '';
@@ -740,6 +798,7 @@
       if (el.type === 'checkbox') el.checked = !!st[id]; else el.value = st[id];
       if (el.type === 'range') el.parentElement.querySelector('output').textContent = el.step === '1' ? el.value : parseFloat(el.value).toFixed(2); }
     $('customWrap').hidden = !$('customFlag').checked;
+    syncSegs();
   }
 
   function drawList() {
@@ -824,7 +883,11 @@
     return out;
   }
 
-  const saveBlob = (blob, filename) => {
+  const saveBlob = async (blob, filename) => {
+    const f = new File([blob], filename, { type: blob.type });
+    if (matchMedia('(max-width:800px)').matches && navigator.canShare && navigator.canShare({ files: [f] })) {
+      try { await navigator.share({ files: [f] }); return; } catch (e) { if (e.name === 'AbortError') return; }
+    }
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 8000);
   };
@@ -899,6 +962,38 @@
     w.document.close();
     w.onload = () => { w.focus(); w.print(); };
     colStatus(`${sheets.length} page(s) sent to the print dialog.`);
+  });
+
+  // ---------- interface: segmented controls, tabs, toolbar ----------
+  const SEGS = { fit: ['Fit inside', 'Fill frame'], rulesStyle: ['As typed', 'Uppercase'], pokerColor: ['Red', 'Blue'], dither: ['Screen', 'Grain', 'Hard', 'Gray'], dpi: ['300 dpi', '600 dpi'] };
+  function syncSegs() {
+    for (const id in SEGS) { const sel = $(id); if (!sel._seg) continue;
+      [...sel._seg.children].forEach((b, i) => { const on = sel.options[i].value === sel.value; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); }); }
+  }
+  for (const id in SEGS) {
+    const sel = $(id), box = document.createElement('div'); box.className = 'seg'; box.setAttribute('role', 'group');
+    const lb = document.querySelector(`label[for="${id}"]`); if (lb) box.setAttribute('aria-label', lb.textContent);
+    [...sel.options].forEach((o, i) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = SEGS[id][i];
+      b.addEventListener('click', () => { sel.value = o.value; sel.dispatchEvent(new Event('input', { bubbles: true })); syncSegs(); }); box.appendChild(b); });
+    sel.after(box); sel.hidden = true; sel._seg = box;
+  }
+  syncSegs();
+
+  const mobile = () => matchMedia('(max-width:800px)').matches, tabBtns = [...document.querySelectorAll('#tabs .tab')];
+  function setTab(t) {
+    document.body.dataset.tab = t; tabBtns.forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+    if (mobile()) document.querySelectorAll(`details[data-tab="${t}"]`).forEach(d => d.open = true);
+    document.querySelector('aside').scrollTop = 0;
+  }
+  tabBtns.forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+  setTab('card');
+
+  const toast = m => { const t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 1800); };
+  $('tbDownload').addEventListener('click', () => $('download').click());
+  $('tbAdd').addEventListener('click', () => { $('addCard').click(); toast(`Added \u00B7 ${collection.length} in collection`); });
+  document.querySelector('main').addEventListener('click', e => {
+    if (!mobile()) return; const m = e.currentTarget;
+    if (m.classList.contains('zoom')) m.classList.remove('zoom'); else if (e.target.id === 'preview') m.classList.add('zoom');
   });
 
   render(preview, 1);
